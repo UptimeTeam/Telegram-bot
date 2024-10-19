@@ -29,3 +29,5 @@ def get_text_messages(message):
 
 #чтобы ботик не останавливался, без этого сообщение не выводит
 bot.polling(none_stop=True)
+
+#
