@@ -10,8 +10,8 @@ bot = telebot.TeleBot('7933512901:AAFgV8RvDQH7_0UEceoMDynmunZwBBTO_MM')
 def main(message):
     # создаем клавиатуруруру
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button_corpuses = types.KeyboardButton("🏢Корпуса ТИУ")
-    button_ask_question = types.KeyboardButton("❓️Задать вопрос")
+    button_corpuses = types.KeyboardButton("🏛️Корпуса ТИУ")
+    button_ask_question = types.KeyboardButton("❓Задать вопрос")
     button_spravka = types.KeyboardButton("🔍Часто задаваемые вопросы")
     keyboard.add(button_corpuses, button_ask_question, button_spravka)  # добавляем новые кнопки
     bot.send_message(message.chat.id, 'Привет!\n\n🤖 "Студенческий Помощник" — ваш надежный спутник в мире учебы! '
@@ -29,7 +29,7 @@ def get_text_messages(message):
     if message.text == "Привет":
         bot.send_message(message.from_user.id,
                          "Привет, чем я могу тебе помочь?")
-    elif message.text == "🏢Корпуса ТИУ":
+    elif message.text == "🏛️Корпуса ТИУ":
         # отправляем изображение с корпусами
         with open('файлеки/корпус.jpg', 'rb') as photo:
             bot.send_photo(message.chat.id, photo)
