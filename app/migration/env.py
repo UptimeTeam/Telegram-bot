@@ -10,7 +10,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.database import Base, database_url
-from app.api.models import User, Master, Service, Application
+from app.api.models import User, Admin, Application
 
 config = context.config
 config.set_main_option("sqlalchemy.url", database_url)
@@ -18,6 +18,11 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+# other values from the config, defined by the needs of env.py,
+# can be acquired:
+# my_important_option = config.get_main_option("my_important_option")
+# ... etc.
 
 
 def run_migrations_offline() -> None:
