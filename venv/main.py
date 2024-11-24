@@ -5,15 +5,14 @@ import telebot
 
 bot = telebot.TeleBot('7933512901:AAFNGkJeeYwnyF7LRhuP8TwcOp9o6IpO5T0')
 
+# Состояния для знакомства с ботом
+USER_STATE = {}
 
 @bot.message_handler(commands=['start'])
 def main(message):
-    # создаем клавиатуруруру
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button_corpuses = types.KeyboardButton("🏢Корпуса ТИУ")
-    button_ask_question = types.KeyboardButton("❓️Задать вопрос")
-    button_spravka = types.KeyboardButton("🔍Часто задаваемые вопросы")
-    keyboard.add(button_corpuses, button_ask_question, button_spravka)  # добавляем новые кнопки
+    button_intro = types.KeyboardButton("Привет, давай знакомиться")
+    keyboard.add(button_intro)
     bot.send_message(message.chat.id, 'Привет!\n\n🤖 "Студенческий Помощник" — ваш надежный спутник в мире учебы! '
                      'Этот бот создан для того, чтобы облегчить жизнь студентам. Он быстро отвечает на часто задаваемые '
                      'вопросы о расписании, экзаменах, учебных материалах и студенческой жизни.\n\n'
@@ -22,19 +21,48 @@ def main(message):
                      '🎓 Учитесь с умом и не тратьте время на поиски информации — доверьтесь "Студенческому Помощнику!"',
                      reply_markup=keyboard)
 
-
-
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
-    if message.text == "Привет":
-        bot.send_message(message.from_user.id,
-                         "Привет, чем я могу тебе помочь?")
+    user_id = message.from_user.id
+    
+    # Проверка состояния пользователя
+    if user_id in USER_STATE:
+        state = USER_STATE[user_id]
+
+        if state == 'ask_name':
+            USER_STATE[user_id] = 'ask_group'  # Переход к следующему состоянию
+            bot.send_message(user_id, "Теперь напиши свою группу:")
+            return
+            
+        elif state == 'ask_group':
+            bot.send_message(user_id, "Ура! Теперь я буду присылать для тебя только самую актуальную информацию! "
+                                       "\n \n *Совсем скоро ты сможешь смотреть здесь свое расписание)")
+            USER_STATE[user_id] = None  # Сброс состояния
+            show_main_menu(user_id)
+            return
+
+    # Начало знакомства
+    if message.text == "Привет, давай знакомиться":
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        button_yes = types.KeyboardButton("Давай")
+        button_later = types.KeyboardButton("Позже")
+        keyboard.add(button_yes, button_later)
+        bot.send_message(user_id, "Расскажи немного о себе, чтобы я мог тебе помочь ещё больше!", reply_markup=keyboard)
+
+    elif message.text == "Давай":
+        bot.send_message(user_id, "Хорошо! Напиши свое ФИО:")
+        USER_STATE[user_id] = 'ask_name'
+    
+    elif message.text == "Позже":
+        bot.send_message(user_id, "Хорошо, если передумаешь, просто напиши мне!")
+        show_main_menu(user_id)
+    
     elif message.text == "🏢Корпуса ТИУ":
-        # отправляем изображение с корпусами
         with open('файлы/корпус.jpg', 'rb') as photo:
             bot.send_photo(message.chat.id, photo)
+
+    
     elif message.text == "🔍Часто задаваемые вопросы":
-        # Готовим кнопки
         keyboard = types.InlineKeyboardMarkup()
         # По очереди готовим текст и обработчик для каждого вопроса
         key_1 = types.InlineKeyboardButton(text='Распределение на профили', callback_data='raspredelenie')
@@ -86,12 +114,25 @@ def get_text_messages(message):
         key_23 = types.InlineKeyboardButton(text='Воинский учёт', callback_data='military_registration')
         keyboard.add(key_23)  
         bot.send_message(message.from_user.id, text='Какую информацию вы хотите получить?', reply_markup=keyboard)
+        pass
+    
     elif message.text == "❓Задать вопрос":
         bot.send_message(message.chat.id, "Пожалуйста, напишите ваш вопрос, и я постараюсь на него ответить.")
+    
     elif message.text == "/help":
         bot.send_message(message.from_user.id, "Напиши привет или нажми на кнопку.")
+    
     else:
         bot.send_message(message.from_user.id, "Я тебя не понимаю. Напиши /help.")
+
+
+def show_main_menu(user_id):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button_corp = types.KeyboardButton("🏢Корпуса ТИУ")
+    button_ask = types.KeyboardButton("❓Задать вопрос")
+    button_faq = types.KeyboardButton("🔍Часто задаваемые вопросы")
+    keyboard.add(button_corp, button_ask, button_faq)
+    bot.send_message(user_id, "Задайте ваш вопрос или выберите из пункта меню", reply_markup=keyboard)
         
         
 @bot.callback_query_handler(func=lambda call: True)
