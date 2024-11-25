@@ -2,7 +2,7 @@ from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
 
-bot = telebot.TeleBot('7933512901:AAFgV8RvDQH7_0UEceoMDynmunZwBBTO_MM')
+bot = telebot.TeleBot('7933512901:AAGiyFGykcactV1XrYq1hYTlnfaM2ai7JDQ')
 
 # вывод на команду старт
     
