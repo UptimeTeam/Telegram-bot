@@ -1,8 +1,18 @@
+from datetime import datetime
+import sqlite3
 from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
 
 bot = telebot.TeleBot('7933512901:AAGiyFGykcactV1XrYq1hYTlnfaM2ai7JDQ')
+
+conn = sqlite3.connect('db.sqlite3', check_same_thread=False)
+cursor = conn.cursor()
+
+
+def db_table_val(telegram_id: int, first_name: str, username: str, created_at: datetime, updated_at: datetime):
+	cursor.execute('REPLACE INTO users (telegram_id, first_name, username, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', (telegram_id, first_name, username, created_at, updated_at))
+	conn.commit()
 
 # вывод на команду старт
     
@@ -29,7 +39,15 @@ def main(message):
 def get_text_messages(message):
     if message.text == "Привет":
         bot.send_message(message.from_user.id,
-                         "Привет, чем я могу тебе помочь?")
+                         "Привет, %s! Чем я могу тебе помочь?" % message.from_user.first_name)
+        
+        us_id = message.from_user.id
+        us_name = message.from_user.first_name
+        crtd_at = datetime.now()
+        username = message.from_user.username
+        upd_at = datetime.now()
+        db_table_val(telegram_id=us_id, first_name=us_name, username=username, created_at=crtd_at, updated_at=upd_at)
+  
     elif message.text == "🏢Корпуса ТИУ":
         # отправляем изображение с корпусами
         with open('файлы/корпус.jpg', 'rb') as photo:
@@ -173,6 +191,8 @@ def callback_query(call):
         bot.send_message(call.message.chat.id, "Информация о практике доступна у вашего куратора.")
     elif call.data == 'military_registration':
         bot.send_message(call.message.chat.id, "Всем молодым людям  необходимо провести сверку документов воинского учета в отделе мобилизационной подготовки по адресу: ул. Володарского, 38 кабинет №110 с 9 сентября  по 13 сентября. При себе иметь паспорт, воинский документ (удостоверение гражданина подлежащего призыву на военную службу или военный билет), иногородние Свидетельство о временной регистрации (если имеется).Время работы отдела мобилизационной подготовки: пн.-четв. с 9:00 до 17:00, пятн. с 9:00 до 16:00. Обед с 13:00 до 14:00")
+
+        
 # Запускаем постоянный опрос бота в Телеграме
 bot.polling(none_stop=True, interval=0)
 
