@@ -14,30 +14,39 @@ cursor = conn.cursor()
 def db_table_val(telegram_id: int, first_name: str, username: str, created_at: datetime, updated_at: datetime):
 	cursor.execute('REPLACE INTO users (telegram_id, first_name, username, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', (telegram_id, first_name, username, created_at, updated_at))
 	conn.commit()
+def db_table_val_admin(admin_id: int, admin_name: str, created_at: datetime, updated_at: datetime):
+	cursor.execute('REPLACE INTO admins (admin_id, admin_name, created_at, updated_at) VALUES (?, ?, ?, ?)', (admin_id, admin_name, created_at, updated_at))
+	conn.commit()
 
 # вывод на команду старт
     
+main_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+button_ask_question = types.KeyboardButton("❓️Задать вопрос")
+button_spravka = types.KeyboardButton("🔍Часто задаваемые вопросы")
+button_info = types.KeyboardButton("Справочник")
+button_admin_panel = types.KeyboardButton("🔑Админ панель")
 
 @bot.message_handler(commands=['start'])
 def main(message):
     # создаем клавиатуруруру
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button_ask_question = types.KeyboardButton("❓️Задать вопрос")
-    button_spravka = types.KeyboardButton("🔍Часто задаваемые вопросы")
-    button_info = types.KeyboardButton("Справочник")
-    keyboard.add(button_info, button_ask_question, button_spravka)  # добавляем новые кнопки
+    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (message.from_user.id, )).fetchone()[0]
+    if if_admin:
+        main_keyboard.add(button_info, button_ask_question, button_spravka, button_admin_panel)
+    else: main_keyboard.add(button_info, button_ask_question, button_spravka)
+    
     bot.send_message(message.chat.id, 'Привет!\n\n🤖 "Студенческий Помощник" — ваш надежный спутник в мире учебы! '
                      'Этот бот создан для того, чтобы облегчить жизнь студентам. Он быстро отвечает на часто задаваемые '
                      'вопросы о расписании, экзаменах, учебных материалах и студенческой жизни.\n\n'
                      '📚 Просто напишите свой вопрос, и получите мгновенный ответ! Будь то информация о дедлайнах, '
                      'советы по подготовке к экзаменам или ресурсы для изучения — наш бот всегда готов помочь.\n\n'
                      '🎓 Учитесь с умом и не тратьте время на поиски информации — доверьтесь "Студенческому Помощнику!"',
-                     reply_markup=keyboard)
+                     reply_markup=main_keyboard)
 
 
 
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
+    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (message.from_user.id, )).fetchone()[0]
     if message.text == "Привет":
         bot.send_message(message.from_user.id,
                          "Привет, %s! Чем я могу тебе помочь?" % message.from_user.first_name)
@@ -48,7 +57,36 @@ def get_text_messages(message):
         username = message.from_user.username
         upd_at = datetime.now()
         db_table_val(telegram_id=us_id, first_name=us_name, username=username, created_at=crtd_at, updated_at=upd_at)
-  
+    
+    elif message.text == "uptimetop1":
+        bot.send_message(message.from_user.id,
+                         "Админ %s авторизован!" % message.from_user.first_name)
+        adm_id = message.from_user.id
+        adm_name = message.from_user.first_name
+        crtd_at = datetime.now()
+        upd_at = datetime.now()
+        db_table_val_admin(admin_id=adm_id, admin_name=adm_name, created_at=crtd_at, updated_at=upd_at)
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        keyboard.add(button_info, button_ask_question, button_spravka, button_admin_panel)
+        bot.send_message(message.from_user.id,
+                         text="Привет, админ!", reply_markup=keyboard)
+        
+    elif message.text == "uptimenottop1":
+        bot.send_message(message.from_user.id, "Админ %s уничтожен!" % message.from_user.first_name)
+        cursor.execute(f'DELETE FROM admins WHERE admin_id = {message.from_user.id}')
+        conn.commit()
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        keyboard.add(button_info, button_ask_question, button_spravka) 
+        bot.send_message(message.from_user.id,
+                         text="Пока!", reply_markup=keyboard)
+    
+    elif message.text == "🔑Админ панель" and if_admin:
+        keyboard = types.ReplyKeyboardMarkup()
+        key_1 = types.KeyboardButton(text='Вопросы')
+        keyboard.add(key_1)
+        bot.send_message(message.from_user.id, text="Выберите раздел", reply_markup=keyboard)
+
+    
     elif message.text == "Справочник":
         keyboard = types.InlineKeyboardMarkup()
         key_1 = types.InlineKeyboardButton(text='Центр медицинского обеспечения', callback_data='medicina')
