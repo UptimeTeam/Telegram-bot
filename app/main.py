@@ -29,6 +29,8 @@ button_admin_panel = types.KeyboardButton("🔑Админ панель")
 @bot.message_handler(commands=['start'])
 def main(message):
     # создаем клавиатуруруру
+    main_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
     if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (message.from_user.id, )).fetchone()[0]
     if if_admin:
         main_keyboard.add(button_info, button_ask_question, button_spravka, button_admin_panel)
