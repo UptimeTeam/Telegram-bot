@@ -32,9 +32,7 @@ class Application(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  # Уникальный идентификатор заявки
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.telegram_id'))  # Внешний ключ на пользователя
-    admin_id: Mapped[int] = mapped_column(Integer, ForeignKey('admins.admin_id'))  # Внешний ключ на админа
-    appointment_date: Mapped[Date] = mapped_column(Date, nullable=False)  # Дата заявки
-    appointment_time: Mapped[Time] = mapped_column(Time, nullable=False)  # Время заявки
+    question: Mapped[str] = mapped_column(String)  # Вопрос
 
     # Связи с админом, пользователем, заявкой
     user: Mapped["User"] = relationship(back_populates="applications")
