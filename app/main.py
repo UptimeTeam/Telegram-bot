@@ -96,6 +96,11 @@ def get_text_messages(message):
         keyboard.add(key_1)
         keyboard.add(key_2)
         bot.send_message(message.from_user.id, text="Выберите раздел", reply_markup=keyboard)
+        
+    elif message.text == "Вопросыℹ️" and if_admin:
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
+        bot.send_message(message.from_user.id, text="Вопрос №1", reply_markup=keyboard)
 
     
     elif message.text == "Справочник":
