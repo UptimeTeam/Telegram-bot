@@ -4,6 +4,7 @@ from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
 
+global main_keyboard
 
 bot = telebot.TeleBot('7933512901:AAGiyFGykcactV1XrYq1hYTlnfaM2ai7JDQ')
 
@@ -116,9 +117,6 @@ def get_text_messages(message):
         keyboard.add(key_3, key_4) 
         
         bot.send_message(message.from_user.id, text="Вопрос №1", reply_markup=keyboard)
-    
-    
-    
     
     elif message.text == "Справочник":
         keyboard = types.InlineKeyboardMarkup()
