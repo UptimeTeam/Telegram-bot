@@ -34,6 +34,7 @@ class Application(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.telegram_id'))  # Внешний ключ на пользователя
     username: Mapped[str] = mapped_column(String)
     question: Mapped[str] = mapped_column(String)  # Вопрос
+    answer: Mapped[str] = mapped_column(String)  # Ответ
     status: Mapped[int] = mapped_column(Integer)
 
     # Связи с админом, пользователем, заявкой
