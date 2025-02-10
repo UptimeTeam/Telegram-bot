@@ -5,21 +5,20 @@ Classes Without Boilerplate
 """
 
 from functools import partial
-from typing import Callable, Literal, Protocol
+from typing import Callable
 
 from . import converters, exceptions, filters, setters, validators
 from ._cmp import cmp_using
+from ._compat import Protocol
 from ._config import get_run_validators, set_run_validators
-from ._funcs import asdict, assoc, astuple, has, resolve_types
+from ._funcs import asdict, assoc, astuple, evolve, has, resolve_types
 from ._make import (
     NOTHING,
     Attribute,
     Converter,
     Factory,
-    _Nothing,
     attrib,
     attrs,
-    evolve,
     fields,
     fields_dict,
     make_class,
@@ -38,15 +37,12 @@ class AttrsInstance(Protocol):
     pass
 
 
-NothingType = Literal[_Nothing.NOTHING]
-
 __all__ = [
-    "NOTHING",
     "Attribute",
     "AttrsInstance",
     "Converter",
     "Factory",
-    "NothingType",
+    "NOTHING",
     "asdict",
     "assoc",
     "astuple",
@@ -89,7 +85,10 @@ def _make_getattr(mod_name: str) -> Callable:
             msg = f"module {mod_name} has no attribute {name}"
             raise AttributeError(msg)
 
-        from importlib.metadata import metadata
+        try:
+            from importlib.metadata import metadata
+        except ImportError:
+            from importlib_metadata import metadata
 
         meta = metadata("attrs")
 

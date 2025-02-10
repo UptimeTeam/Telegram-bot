@@ -32,10 +32,7 @@ class Application(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  # Уникальный идентификатор заявки
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.telegram_id'))  # Внешний ключ на пользователя
-    username: Mapped[str] = mapped_column(String)
     question: Mapped[str] = mapped_column(String)  # Вопрос
-    answer: Mapped[str] = mapped_column(String)  # Ответ
-    status: Mapped[int] = mapped_column(Integer)
 
     # Связи с админом, пользователем, заявкой
     user: Mapped["User"] = relationship(back_populates="applications")
