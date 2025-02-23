@@ -125,7 +125,7 @@ def get_text_messages(message):
         keyboard.add(key_3)
         key_4 = types.InlineKeyboardButton(text='ВШЦТ', callback_data='institute')
         keyboard.add(key_4)
-        key_5 = types.InlineKeyboardButton(text='Приемная комиссия', callback_data='commission')
+        key_5 = types.InlineKeyboardButton(text='Приемная комиссия', callback_data='comission')
         keyboard.add(key_5)
         key_6 = types.InlineKeyboardButton(text='Корпуса ТИУ', callback_data='corpusestyuiu')
         keyboard.add(key_6)
