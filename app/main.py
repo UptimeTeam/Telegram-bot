@@ -260,6 +260,8 @@ def answer_send(message):
 @bot.callback_query_handler(func=lambda call: call.data == 'directory')
 def handle_directory(call):
     bot.delete_message(call.from_user.id, call.message.message_id)
+    if call.message.message_id - 1 > 0:
+        bot.delete_message(call.from_user.id, call.message.message_id - 1)
     keyboard = types.InlineKeyboardMarkup()
     key_1 = types.InlineKeyboardButton(text='Центр медицинского обеспечения', callback_data='medicina')
     keyboard.add(key_1)
