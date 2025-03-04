@@ -8,3 +8,4 @@ pydantic_settings==2.5.2
 alembic==1.13.3
 aiosqlite==0.20.0
 pyTelegramBotAPI==4.25.0
+psycopg2
