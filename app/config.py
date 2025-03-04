@@ -1,18 +1,7 @@
 import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-class Settings(BaseSettings):
-    BOT_TOKEN: str
-    BASE_SITE: str
-    ADMIN_ID: int
-    model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
-    )
-
-    def get_webhook_url(self) -> str:
-        """Возвращает URL вебхука с кодированием специальных символов."""
-        return f"{self.BASE_SITE}/webhook"
-
-
-settings = Settings()
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_NAME = os.getenv('DB_NAME', 'tgbot_vc')
+DB_USER = os.getenv('DB_USER', 'egor')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'wA0rF-rD6Gx4')
+DB_PORT = int(os.getenv('DB_PORT', 5432))

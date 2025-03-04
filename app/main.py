@@ -1,25 +1,44 @@
 from datetime import datetime
-import sqlite3
+#import sqlite3
 from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
 import kb, texts
+from db import get_db_connection
+from psycopg2 import OperationalError
 
 bot = telebot.TeleBot('7933512901:AAGiyFGykcactV1XrYq1hYTlnfaM2ai7JDQ')
 
-conn = sqlite3.connect('db.sqlite3', check_same_thread=False)
+conn = get_db_connection()
 cursor = conn.cursor()
 
 
-def db_table_val(telegram_id: int, first_name: str, username: str, created_at: datetime, updated_at: datetime):
-	cursor.execute('REPLACE INTO users (telegram_id, first_name, username, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', (telegram_id, first_name, username, created_at, updated_at))
+def db_table_val(telegram_id: int, first_name: str, username: str):
+	cursor.execute('''
+    INSERT INTO users (telegram_id, firstname, username) 
+    VALUES (%s, %s, %s)
+    ON CONFLICT (telegram_id) 
+    DO UPDATE SET 
+        firstname = EXCLUDED.firstname,
+        username = EXCLUDED.username
+''', (telegram_id, first_name, username))
 	conn.commit()
-def db_table_val_admin(admin_id: int, admin_name: str, created_at: datetime, updated_at: datetime):
-	cursor.execute('REPLACE INTO admins (admin_id, admin_name, created_at, updated_at) VALUES (?, ?, ?, ?)', (admin_id, admin_name, created_at, updated_at))
-	conn.commit()
-def db_table_val_app(user_id: int, username:str, question: str, answer: str, status:int, created_at: datetime, updated_at: datetime):
-     cursor.execute('REPLACE INTO applications (user_id, username, question, answer, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', (user_id, username, question, answer, status, created_at, updated_at))
-     conn.commit()
+def db_table_val_admin(admin_tg_id: int, admin_name: str, admin_username: str):
+    cursor.execute('''INSERT INTO admins
+    (admin_tg_id, admin_name, admin_username) 
+    VALUES (%s, %s, %s)
+    ON CONFLICT (admin_tg_id) 
+    DO UPDATE SET 
+        admin_name = EXCLUDED.admin_name,
+        admin_username = EXCLUDED.admin_username
+''', (admin_tg_id, admin_name, admin_username))
+    conn.commit()
+def db_table_val_app(user_id: int, username:str, question: str, answer: str, status:bool):
+    cursor.execute('''INSERT INTO applications
+    (telegram_id, username, question, answer, status) 
+    VALUES (%s, %s, %s, %s, %s)
+''', (user_id, username, question, answer, status))
+    conn.commit()
 
 questionnum = 1
 myquestionnum = 1
@@ -29,18 +48,21 @@ user_id=1
 def main(message):
     global user_id
     user_id=message.from_user.id
-    if_exist = cursor.execute('SELECT EXISTS(SELECT * FROM users where telegram_id = ?)', (user_id, )).fetchone()[0]
-    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (user_id, )).fetchone()[0]
-
-    if if_exist:
-        cursor.execute('UPDATE users SET updated_at = ? WHERE telegram_id = ?', (datetime.now(), user_id))
+    cursor.execute('SELECT EXISTS(SELECT 1 FROM users WHERE telegram_id = %s)', (user_id,))
+    if_exist = cursor.fetchone()[0]
+    try:
+        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
+        if_admin = cursor.fetchone()[0]
         conn.commit()
-    else:
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
+
+    if not if_exist:
         db_table_val(telegram_id=message.from_user.id,
                      first_name=message.from_user.first_name,
-                     username=message.from_user.username,
-                     created_at=datetime.now(),
-                     updated_at=datetime.now())
+                     username=message.from_user.username)
         
     if if_admin: bot.send_message(message.chat.id, texts.hello_admin, reply_markup=kb.main_keyboard_admin)
     else: bot.send_message(message.chat.id, texts.hello_user, reply_markup=kb.main_keyboard_user)
@@ -52,7 +74,14 @@ def get_text_messages(message):
     
     global user_id
     user_id = message.from_user.id
-    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (user_id, )).fetchone()[0]
+    try:
+        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
+        if_admin = cursor.fetchone()[0]
+        conn.commit()
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
     
     if message.text.lower() == "привет":
         bot.send_message(message.from_user.id, "Привет, %s! Чем я могу тебе помочь?" % message.from_user.first_name)
@@ -62,25 +91,22 @@ def get_text_messages(message):
         else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
     
     elif message.text == "uptimetop1":
-        if_exist_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (user_id, )).fetchone()[0]
+        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
+        if_exist_admin = cursor.fetchone()[0]
         
         if if_exist_admin:
-            cursor.execute('UPDATE users SET updated_at = ? WHERE id = ?', (datetime.now(), user_id))
-            conn.commit()
-            bot.send_message(message.from_user.id, "С возвращением!" % message.from_user.first_name, reply_markup=kb.main_keyboard_admin)
-
+            bot.send_message(message.from_user.id, "С возвращением!", reply_markup=kb.main_keyboard_admin)
         else:
-            adm_id = message.from_user.id
-            adm_name = message.from_user.first_name
-            crtd_at = datetime.now()
-            upd_at = datetime.now()
-            db_table_val_admin(admin_id=adm_id, admin_name=adm_name, created_at=crtd_at, updated_at=upd_at)
-            bot.send_message(message.from_user.id, "Добро пожаловать!" % message.from_user.first_name, reply_markup=kb.main_keyboard_admin)
+            admin_id = message.from_user.id
+            admin_name = message.from_user.first_name
+            admin_username = message.from_user.username
+            db_table_val_admin(admin_tg_id=admin_id, admin_name=admin_name, admin_username=admin_username)
+            bot.send_message(message.from_user.id, "Добро пожаловать!", reply_markup=kb.main_keyboard_admin)
         
     elif message.text == "uptimenottop1":
-        cursor.execute(f'DELETE FROM admins WHERE admin_id = {message.from_user.id}')
+        cursor.execute(f'DELETE FROM admins WHERE admin_tg_id = {message.from_user.id}')
         conn.commit()
-        bot.send_message(message.from_user.id, "Админ уничтожен!" % message.from_user.first_name, reply_markup=kb.main_keyboard_user)
+        bot.send_message(message.from_user.id, "Админ уничтожен!", reply_markup=kb.main_keyboard_user)
     
     elif message.text == "🔑Админ панель" and if_admin:
         bot.send_message(message.from_user.id, text="Выберите раздел", reply_markup=kb.admin_panel)
@@ -93,9 +119,12 @@ def get_text_messages(message):
         keyboard.add(key_1, key_2, key_3) 
         
         try:
-            questionnum = cursor.execute('SELECT id FROM applications where status=0').fetchone()[0]
-            quser = cursor.execute(f'SELECT username FROM applications where id={questionnum}').fetchone()[0]
-            qtext = cursor.execute(f'SELECT question FROM applications where id={questionnum}').fetchone()[0]
+            cursor.execute('SELECT id FROM applications where status=False')
+            questionnum = cursor.fetchone()[0]
+            cursor.execute('SELECT username FROM applications where id=%s', (questionnum,))
+            quser = cursor.fetchone()[0]
+            cursor.execute('SELECT question FROM applications where id=%s', (questionnum,))
+            qtext = cursor.fetchone()[0]
             bot.send_message(message.from_user.id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
         except:
             bot.send_message(message.from_user.id, text="Все вопросы уже решены!", reply_markup=keyboard)
@@ -108,9 +137,12 @@ def get_text_messages(message):
         keyboard.add(key_1, key_3) 
         
         try:
-            myqtext = cursor.execute(F'SELECT question FROM applications where user_id={user_id}').fetchone()[0]
-            myquestionnum = cursor.execute(F'SELECT id FROM applications where user_id={user_id}').fetchone()[0]
-            myquestionans = cursor.execute(F'SELECT answer FROM applications where user_id={user_id}').fetchone()[0]
+            cursor.execute('SELECT question FROM applications where telegram_id=%s', (user_id,))
+            myqtext = cursor.fetchone()[0]
+            cursor.execute('SELECT id FROM applications where telegram_id=%s', (user_id,))
+            myquestionnum = cursor.fetchone()[0]
+            cursor.execute('SELECT answer FROM applications where telegram_id=%s', (user_id,))
+            myquestionans = cursor.fetchone()[0]
             bot.send_message(message.from_user.id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
         except:
             bot.send_message(message.from_user.id, text="Вы пока не задали ни одного вопроса")
@@ -207,7 +239,14 @@ def get_text_messages(message):
         
 def question_send(message):
     global user_id
-    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (user_id, )).fetchone()[0]
+    try:
+        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
+        if_admin = cursor.fetchone()[0]
+        conn.commit()
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
     user_id = message.from_user.id
     question = message.text
     if question!='🏠На главную':
@@ -215,9 +254,7 @@ def question_send(message):
                     username = message.from_user.username,
                     question=question,
                     answer="Пока на этот вопрос не ответили",
-                    status = 0,
-                    created_at=datetime.now(),
-                    updated_at=datetime.now())
+                    status = False)
         if if_admin: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_admin)
         else: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_user)
     else: 
@@ -225,7 +262,14 @@ def question_send(message):
         else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
 
 def answer_send(message):
-    if_admin = cursor.execute('SELECT EXISTS(SELECT * FROM admins where admin_id = ?)', (user_id, )).fetchone()[0]
+    try:
+        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
+        if_admin = cursor.fetchone()[0]
+        conn.commit()
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
     global questionnum
     answer = message.text
     if answer=='🏠На главную':
@@ -239,9 +283,11 @@ def answer_send(message):
         key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextq')
         keyboard.add(key_1, key_2, key_3) 
         
-        qtext = cursor.execute(f'SELECT question FROM applications where id={questionnum}').fetchone()[0]
+        cursor.execute('SELECT question FROM applications where id=%s', (questionnum,))
+        qtext = cursor.fetchone()[0]
         questionnum = questionnum
-        quser = cursor.execute(f'SELECT username FROM applications where id={questionnum}').fetchone()[0]
+        cursor.execute('SELECT username FROM applications where id=%s', (questionnum,))
+        quser = cursor.fetchone()[0]
         
         bot.send_message(message.from_user.id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
 
@@ -251,9 +297,9 @@ def answer_send(message):
         key_2 = types.KeyboardButton(text='🔙Назад ')
         keyboard.add(key_1)
         keyboard.add(key_2)
-        cursor.execute('UPDATE applications SET answer = ? WHERE id = ?', (answer, questionnum))
+        cursor.execute('UPDATE applications SET answer = %s WHERE id = %s', (answer, questionnum))
         conn.commit()
-        cursor.execute(f'UPDATE applications SET status = ? WHERE id = ?', (1,questionnum))
+        cursor.execute('UPDATE applications SET status = %s WHERE id = %s', (1,questionnum))
         conn.commit()
         bot.send_message(message.from_user.id, text="Ответ отправлен!")
 
@@ -287,10 +333,16 @@ def callback_query(call):
         key_2 = types.InlineKeyboardButton(text='Ответить', callback_data='answer_await')
         key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextq')
         keyboard.add(key_1, key_2, key_3)       
-        try: questionnum = cursor.execute(f'SELECT id FROM applications where status=0 AND id<{questionnum}').fetchone()[0]
-        except: questionnum = cursor.execute('SELECT id FROM applications where status=0').fetchone()[0]
-        qtext = cursor.execute(f'SELECT question FROM applications where id={questionnum}').fetchone()[0]
-        quser = cursor.execute(f'SELECT username FROM applications where id={questionnum}').fetchone()[0]
+        try: 
+            cursor.execute('SELECT id FROM applications where status=False AND id<%s', (questionnum,))
+            questionnum = cursor.fetchone()[0]
+        except:
+            cursor.execute('SELECT id FROM applications where status=False')
+            questionnum = cursor.fetchone()[0]
+        cursor.execute('SELECT question FROM applications where id=%s', (questionnum,))
+        qtext = cursor.fetchone()[0]
+        cursor.execute('SELECT username FROM applications where id=%s', (questionnum,))
+        quser = cursor.fetchone()[0]
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)    
             
     elif call.data == 'answer_await':        
@@ -310,10 +362,16 @@ def callback_query(call):
         key_2 = types.InlineKeyboardButton(text='Ответить', callback_data='answer_await')
         key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextq')
         keyboard.add(key_1, key_2, key_3)    
-        try: questionnum = cursor.execute(f'SELECT id FROM applications where status=0 AND id>{questionnum}').fetchone()[0]
-        except: questionnum = cursor.execute('SELECT id FROM applications where status=0').fetchone()[0]
-        qtext = cursor.execute(f'SELECT question FROM applications where id={questionnum}').fetchone()[0]
-        quser = cursor.execute(f'SELECT username FROM applications where id={questionnum}').fetchone()[0]
+        try:
+            cursor.execute('SELECT id FROM applications where status=False AND id>%s', (questionnum,))
+            questionnum = cursor.fetchone()[0]
+        except:
+            cursor.execute('SELECT id FROM applications where status=False')
+            questionnum = cursor.fetchone()[0]
+        cursor.execute('SELECT question FROM applications where id=%s', (questionnum,))
+        qtext = cursor.fetchone()[0]
+        cursor.execute('SELECT username FROM applications where id=%s', (questionnum,))
+        quser = cursor.fetchone()[0]
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
     
     elif call.data == 'previousmyq':        
@@ -322,10 +380,16 @@ def callback_query(call):
         key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousmyq')
         key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextmyq')
         keyboard.add(key_1, key_3)    
-        try: myquestionnum = cursor.execute(f'SELECT id FROM applications where user_id={user_id} AND id<{myquestionnum}').fetchone()[0]
-        except: myquestionnum = cursor.execute(f'SELECT id FROM applications where user_id={user_id}').fetchone()[0]
-        myqtext = cursor.execute(f'SELECT question FROM applications where id={myquestionnum}').fetchone()[0]
-        myquestionans = cursor.execute(F'SELECT answer FROM applications where id={myquestionnum}').fetchone()[0]
+        try: 
+            cursor.execute('SELECT id FROM applications where telegram_id=%s AND id<%s', (user_id,questionnum,))
+            myquestionnum = cursor.fetchone()[0]
+        except: 
+            cursor.execute('SELECT id FROM applications where telegram_id=%s', (user_id,))
+            myquestionnum = cursor.fetchone()[0]
+        cursor.execute('SELECT question FROM applications where id=%s', (myquestionnum,))
+        myqtext = cursor.fetchone()[0]
+        cursor.execute('SELECT answer FROM applications where id=%s', (myquestionnum,))
+        myquestionans = cursor.fetchone()[0]
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
     
     elif call.data == 'nextmyq':        
@@ -334,10 +398,16 @@ def callback_query(call):
         key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousmyq')
         key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextmyq')
         keyboard.add(key_1, key_3)    
-        try: myquestionnum = cursor.execute(f'SELECT id FROM applications where user_id={user_id} AND id>{myquestionnum}').fetchone()[0]
-        except: myquestionnum = cursor.execute(f'SELECT id FROM applications where user_id={user_id}').fetchone()[0]
-        myqtext = cursor.execute(f'SELECT question FROM applications where id={myquestionnum}').fetchone()[0]
-        myquestionans = cursor.execute(F'SELECT answer FROM applications where id={myquestionnum}').fetchone()[0]
+        try: 
+            cursor.execute('SELECT id FROM applications where telegram_id=%s AND id>%s', (user_id,questionnum,))
+            myquestionnum = cursor.fetchone()[0]
+        except:
+            cursor.execute('SELECT id FROM applications where telegram_id=%s', (user_id,))
+            myquestionnum = cursor.fetchone()[0]
+        cursor.execute('SELECT question FROM applications where id=%s', (myquestionnum,))
+        myqtext = cursor.fetchone()[0]
+        cursor.execute('SELECT answer FROM applications where id=%s', (myquestionnum,))
+        myquestionans = cursor.fetchone()[0]
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
 
     elif call.data == 'raspredelenie':
