@@ -1,5 +1,3 @@
-from datetime import datetime
-#import sqlite3
 from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
@@ -299,7 +297,7 @@ def answer_send(message):
         keyboard.add(key_2)
         cursor.execute('UPDATE applications SET answer = %s WHERE id = %s', (answer, questionnum))
         conn.commit()
-        cursor.execute('UPDATE applications SET status = %s WHERE id = %s', (1,questionnum))
+        cursor.execute('UPDATE applications SET status = %s WHERE id = %s', (True,questionnum))
         conn.commit()
         bot.send_message(message.from_user.id, text="Ответ отправлен!")
 
@@ -447,7 +445,7 @@ def callback_query(call):
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
 
     elif call.data == 'raspredelenie':
-        keyboard = types.InlineKeyboardMarkup(resize_keyboard=True)
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
         button_raspredelen = types.InlineKeyboardButton("Изменить заявление", callback_data='raspredelen')
         button_specialty = types.InlineKeyboardButton("Специальность", callback_data='specialty')
         button_nomer = types.InlineKeyboardButton("Узнать номер группы", callback_data='nomer')
