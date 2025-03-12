@@ -253,11 +253,23 @@ def question_send(message):
                     question=question,
                     answer="Пока на этот вопрос не ответили",
                     status = False)
+        notify_admins(question, message.from_user.username)
         if if_admin: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_admin)
         else: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_user)
     else: 
         if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
         else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
+
+def notify_admins(question, username):
+    cursor.execute("SELECT admin_tg_id FROM admins")
+    admins = cursor.fetchone()
+    if admins:
+        message_text = f"\U0001F514 Новый вопрос от @{username}:\n{question}"
+        for admin in admins:
+            try:
+                bot.send_message(admin, message_text)
+            except Exception as e:
+                print(f"Ошибка отправки уведомления администратору {admin}: {e}")
 
 def answer_send(message):
     try:
