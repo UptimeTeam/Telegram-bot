@@ -1,96 +1,53 @@
+#pip install -r requirements.txt
 from telebot import types
 import telebot
 from telebot.types import InputMediaPhoto
-import kb, texts
-from db import get_db_connection
+import kb, texts, src.ai_operations as ai
+from src.bd_operations import get_db_connection
+import src.bd_operations as bd
 from psycopg2 import OperationalError
+from config import BOT_TOKEN
+import json
 
-bot = telebot.TeleBot('7933512901:AAGiyFGykcactV1XrYq1hYTlnfaM2ai7JDQ')
+bot = telebot.TeleBot(f'{BOT_TOKEN}')
 
 conn = get_db_connection()
 cursor = conn.cursor()
 
-
-def db_table_val(telegram_id: int, first_name: str, username: str):
-	cursor.execute('''
-    INSERT INTO users (telegram_id, firstname, username) 
-    VALUES (%s, %s, %s)
-    ON CONFLICT (telegram_id) 
-    DO UPDATE SET 
-        firstname = EXCLUDED.firstname,
-        username = EXCLUDED.username
-''', (telegram_id, first_name, username))
-	conn.commit()
-def db_table_val_admin(admin_tg_id: int, admin_name: str, admin_username: str):
-    cursor.execute('''INSERT INTO admins
-    (admin_tg_id, admin_name, admin_username) 
-    VALUES (%s, %s, %s)
-    ON CONFLICT (admin_tg_id) 
-    DO UPDATE SET 
-        admin_name = EXCLUDED.admin_name,
-        admin_username = EXCLUDED.admin_username
-''', (admin_tg_id, admin_name, admin_username))
-    conn.commit()
-def db_table_val_app(user_id: int, username:str, question: str, answer: str, status:bool):
-    cursor.execute('''INSERT INTO applications
-    (telegram_id, username, question, answer, status) 
-    VALUES (%s, %s, %s, %s, %s)
-''', (user_id, username, question, answer, status))
-    conn.commit()
-
 questionnum = 1
 myquestionnum = 1
-user_id=1
+user_id = 1
+question = 1
     
 @bot.message_handler(commands=['start'])
 def main(message):
+    conn = get_db_connection()
+    cursor = conn.cursor()
     global user_id
     user_id=message.from_user.id
-    cursor.execute('SELECT EXISTS(SELECT 1 FROM users WHERE telegram_id = %s)', (user_id,))
-    if_exist = cursor.fetchone()[0]
-    try:
-        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
-        if_admin = cursor.fetchone()[0]
-        conn.commit()
-
-    except OperationalError as e:
-        print(f"Ошибка базы данных: {e}")
-        conn.rollback()
+    if_exist = bd.if_exist(user_id, cursor)
 
     if not if_exist:
-        db_table_val(telegram_id=message.from_user.id,
+        bd.db_table_val(telegram_id=message.from_user.id,
                      first_name=message.from_user.first_name,
-                     username=message.from_user.username)
+                     username=message.from_user.username, cursor=cursor, conn=conn)
         
-    if if_admin: bot.send_message(message.chat.id, texts.hello_admin, reply_markup=kb.main_keyboard_admin)
-    else: bot.send_message(message.chat.id, texts.hello_user, reply_markup=kb.main_keyboard_user)
-
-
+    home(message.from_user.id)
 
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
-    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
     global user_id
     user_id = message.from_user.id
-    try:
-        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
-        if_admin = cursor.fetchone()[0]
-        conn.commit()
-
-    except OperationalError as e:
-        print(f"Ошибка базы данных: {e}")
-        conn.rollback()
+    check_if_admin(message.from_user.id)
     
-    if message.text.lower() == "привет":
-        bot.send_message(message.from_user.id, "Привет, %s! Чем я могу тебе помочь?" % message.from_user.first_name)
-    
-    elif message.text == "🏠На главную":
-        if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
-        else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
+    if message.text == "🏠На главную" or message.text == "🏠":
+        home(message.from_user.id)
     
     elif message.text == "uptimetop1":
-        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
-        if_exist_admin = cursor.fetchone()[0]
+        if_exist_admin = bd.if_exist_admin(user_id, cursor)
         
         if if_exist_admin:
             bot.send_message(message.from_user.id, "С возвращением!", reply_markup=kb.main_keyboard_admin)
@@ -98,7 +55,7 @@ def get_text_messages(message):
             admin_id = message.from_user.id
             admin_name = message.from_user.first_name
             admin_username = message.from_user.username
-            db_table_val_admin(admin_tg_id=admin_id, admin_name=admin_name, admin_username=admin_username)
+            bd.db_table_val_admin(admin_tg_id=admin_id, admin_name=admin_name, admin_username=admin_username, cursor=cursor, conn=conn)
             bot.send_message(message.from_user.id, "Добро пожаловать!", reply_markup=kb.main_keyboard_admin)
         
     elif message.text == "uptimenottop1":
@@ -106,10 +63,12 @@ def get_text_messages(message):
         conn.commit()
         bot.send_message(message.from_user.id, "Админ уничтожен!", reply_markup=kb.main_keyboard_user)
     
-    elif message.text == "🔑Админ панель" and if_admin:
+    elif message.text == "🔑Админ панель" and check_if_admin:
         bot.send_message(message.from_user.id, text="Выберите раздел", reply_markup=kb.admin_panel)
         
-    elif message.text == "Вопросыℹ️" and if_admin:
+    elif message.text == "Вопросыℹ️" and check_if_admin:
+        global questionnum
+        bot.send_message(message.chat.id, "Выберите вопрос, на который могли бы ответить👇", reply_markup=kb.kb_home)
         keyboard = types.InlineKeyboardMarkup()
         key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousq')
         key_2 = types.InlineKeyboardButton(text='Ответить', callback_data='answer_await')
@@ -125,140 +84,36 @@ def get_text_messages(message):
             qtext = cursor.fetchone()[0]
             bot.send_message(message.from_user.id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
         except:
-            bot.send_message(message.from_user.id, text="Все вопросы уже решены!", reply_markup=keyboard)
-
-    
-    elif message.text == "📬Мои вопросы":
-        keyboard = types.InlineKeyboardMarkup()
-        key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousmyq')
-        key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextmyq')
-        keyboard.add(key_1, key_3) 
-        
-        try:
-            cursor.execute('SELECT question FROM applications where telegram_id=%s', (user_id,))
-            myqtext = cursor.fetchone()[0]
-            cursor.execute('SELECT id FROM applications where telegram_id=%s', (user_id,))
-            myquestionnum = cursor.fetchone()[0]
-            cursor.execute('SELECT answer FROM applications where telegram_id=%s', (user_id,))
-            myquestionans = cursor.fetchone()[0]
-            bot.send_message(message.from_user.id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
-        except:
-            bot.send_message(message.from_user.id, text="Вы пока не задали ни одного вопроса")
+            bot.send_message(message.from_user.id, text="Все вопросы уже решены!", reply_markup=kb.kb_home)
 
     elif message.text == "📖Справочник":
-        keyboard = types.InlineKeyboardMarkup()
-        key_1 = types.InlineKeyboardButton(text='Центр медицинского обеспечения', callback_data='medicina')
-        keyboard.add(key_1)
-        key_2 = types.InlineKeyboardButton(text='Библиотечно-издательский комплекс', callback_data='library')
-        keyboard.add(key_2)
-        key_3 = types.InlineKeyboardButton(text='Общежития', callback_data='dormitory')
-        keyboard.add(key_3)
-        key_4 = types.InlineKeyboardButton(text='ВШЦТ', callback_data='institute')
-        keyboard.add(key_4)
-        key_5 = types.InlineKeyboardButton(text='Приемная комиссия', callback_data='comission')
-        keyboard.add(key_5)
-        key_6 = types.InlineKeyboardButton(text='Корпуса ТИУ', callback_data='corpusestyuiu')
-        keyboard.add(key_6)
-        bot.send_message(message.from_user.id, text='Какую информацию вы хотите получить?', reply_markup=keyboard)
-    elif message.text == "🔍Частые вопросы":
-        # Готовим кнопки
-        keyboard = types.InlineKeyboardMarkup()
-        # По очереди готовим текст и обработчик для каждого вопроса
-        key_1 = types.InlineKeyboardButton(text='Распределение на профили', callback_data='raspredelenie')
-        # И добавляем кнопку на экран
-        keyboard.add(key_1)
-        key_2 = types.InlineKeyboardButton(text='Номер группы', callback_data='nomer')
-        keyboard.add(key_2)
-        key_3 = types.InlineKeyboardButton(text='Информация о пропусках, картах, зачетках', callback_data='studbilet')
-        keyboard.add(key_3)
-        key_4 = types.InlineKeyboardButton(text='Как попасть в корпус', callback_data='korpus')
-        keyboard.add(key_4)
-        key_5 = types.InlineKeyboardButton(text='Общежитие', callback_data='obshaga')
-        keyboard.add(key_5)
-        key_6 = types.InlineKeyboardButton(text='PRE-курс', callback_data='pre-kurs')
-        keyboard.add(key_6)
-        key_7 = types.InlineKeyboardButton(text='Личный кабинет ТИУ, Educon', callback_data='lk')
-        keyboard.add(key_7)
-        key_8 = types.InlineKeyboardButton(text='Сброс пароля zimbra', callback_data='zimbra')
-        keyboard.add(key_8)
-        key_9 = types.InlineKeyboardButton(text='Коммуникации (беседа ВК, ТГ)', callback_data='communication')
-        keyboard.add(key_9)
-        key_10 = types.InlineKeyboardButton(text='Перевод, отчисление, восстановление, академический отпуск', callback_data='poka')
-        keyboard.add(key_10)
-        key_11 = types.InlineKeyboardButton(text='Справки', callback_data='spravka')
-        keyboard.add(key_11)
+        bot.send_message(message.from_user.id, text='Какую информацию вы хотите получить?', reply_markup=kb.spr_keyboard)
         
-        key_12 = types.InlineKeyboardButton(text='Стипендия', callback_data='stipa')
-        keyboard.add(key_12)
-        key_13 = types.InlineKeyboardButton(text='Повышенная стипендия', callback_data='pgas')
-        keyboard.add(key_13)
-        key_14 = types.InlineKeyboardButton(text='Расписание', callback_data='raspisanie')
-        keyboard.add(key_14) 
-        key_15 = types.InlineKeyboardButton(text='Кураторы групп', callback_data='curators')
-        keyboard.add(key_15) 
-        key_16 = types.InlineKeyboardButton(text='Допуск к физкультуре', callback_data='PE')
-        keyboard.add(key_16) 
-        key_17 = types.InlineKeyboardButton(text='Не могу быть на учёбе (заболел, медкомиссия)', callback_data='absence')
-        keyboard.add(key_17) 
-        key_18 = types.InlineKeyboardButton(text='Календарный учебный график', callback_data='academic_calendar')
-        keyboard.add(key_18) 
-        key_19 = types.InlineKeyboardButton(text='Учебный план (какие будут дисциплины)', callback_data='curriculum')
-        keyboard.add(key_19) 
-        key_20 = types.InlineKeyboardButton(text='Элективы', callback_data='electives')
-        keyboard.add(key_20) 
-        key_21 = types.InlineKeyboardButton(text='Дирекция, территориальный отдел', callback_data='administration')
-        keyboard.add(key_21) 
-        key_22 = types.InlineKeyboardButton(text='Практика', callback_data='internship')
-        keyboard.add(key_22) 
-        key_23 = types.InlineKeyboardButton(text='Воинский учёт', callback_data='military_registration')
-        keyboard.add(key_23)  
-        key_24 = types.InlineKeyboardButton(text='Заочники', callback_data='zaoch')
-        keyboard.add(key_24)
-        key_25 = types.InlineKeyboardButton(text='Магистры', callback_data='magistr')
-        keyboard.add(key_25)
-        bot.send_message(message.from_user.id, text='Какую информацию вы хотите получить?', reply_markup=keyboard)
-    
-    
+    elif message.text == "🔍Частые вопросы":
+        bot.send_message(message.from_user.id, text='Какую информацию вы хотите получить?', reply_markup=kb.faq_keyboard)
+
     elif message.text == "Распределение на профили":
         keyboard = types.InlineKeyboardMarkup()
         key_1 = types.InlineKeyboardButton(text='Специальности', callback_data='specialties')
         keyboard.add(key_1)
         bot.send_message(message.from_user.id, text='Специальности', reply_markup=keyboard)
-    elif message.text == "❓️Задать вопрос":
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        key_1 = types.KeyboardButton(text='🏠На главную')
-        keyboard.add(key_1)
-        bot.send_message(message.chat.id, "Пожалуйста, напишите ваш вопрос, и я передам его оператору",reply_markup=keyboard)
-        bot.register_next_step_handler(message, question_send)
-    elif message.text == "/help":
-        bot.send_message(message.from_user.id, "Напиши привет или нажми на кнопку.")
-    else:
-        bot.send_message(message.from_user.id, "Я тебя не понимаю. Напиши /help.")
-        
-def question_send(message):
-    global user_id
-    try:
-        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
-        if_admin = cursor.fetchone()[0]
-        conn.commit()
 
-    except OperationalError as e:
-        print(f"Ошибка базы данных: {e}")
-        conn.rollback()
-    user_id = message.from_user.id
-    question = message.text
-    if question!='🏠На главную':
-        db_table_val_app(user_id=message.from_user.id,
-                    username = message.from_user.username,
-                    question=question,
-                    answer="Пока на этот вопрос не ответили",
-                    status = False)
-        notify_admins(question, message.from_user.username)
-        if if_admin: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_admin)
-        else: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_user)
-    else: 
-        if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
-        else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
+    elif message.text == "/help":
+        bot.send_message(message.from_user.id, "Привет! Я виртуальный помощник студента! Задавай свой вопрос, и я постараюсь на него ответить!")
+    else:
+        try:
+            global question
+            question = message.text
+            with open('bz0.json', 'r', encoding='utf-8') as file:
+                data = json.load(file)
+            gpt_answer = ai.get_answer(message.text, data)
+            bot.send_message(message.from_user.id, gpt_answer)
+            bot.send_message(message.from_user.id, text='Помог ли вам мой ответ?', reply_markup=kb.satisfaction_keyboard)
+
+        except Exception as e:
+            print(f"Ошибка генерации ответа: {e}")
+            bot.send_message(message.from_user.id, "Я пока не могу ответить на этот вопрос.")
+
 
 def notify_admins(question, username):
     cursor.execute("SELECT admin_tg_id FROM admins")
@@ -271,22 +126,42 @@ def notify_admins(question, username):
             except Exception as e:
                 print(f"Ошибка отправки уведомления администратору {admin}: {e}")
 
-def answer_send(message):
+
+def notify_user(question, answer, id):
+    cursor.execute("SELECT telegram_id FROM applications WHERE id=%s", (id,))
+    user = cursor.fetchone()[0]
+    if user:
+        message_text = f"\U0001F514 Получен ответ на ваш вопрос\n\n{question}\n\nОтвет: {answer}"
+        try:
+            bot.send_message(user, message_text)
+        except Exception as e:
+            print(f"Ошибка отправки уведомления пользователю {user}: {e}")
+
+
+def check_if_admin(id):
     try:
-        cursor.execute('SELECT EXISTS(SELECT 1 FROM admins WHERE admin_tg_id = %s)', (user_id,))
-        if_admin = cursor.fetchone()[0]
+        if_admin = bd.if_admin(id, cursor)
         conn.commit()
 
     except OperationalError as e:
         print(f"Ошибка базы данных: {e}")
         conn.rollback()
+    return if_admin
+
+
+def home(id):
+    if check_if_admin(id): bot.send_message(id, texts.home, reply_markup=kb.main_keyboard_admin)
+    else: bot.send_message(id, texts.home, reply_markup=kb.main_keyboard_user)
+
+def answer_send(message):
     global questionnum
     answer = message.text
     if answer=='🏠На главную':
-        if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
+        if check_if_admin(message): bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
         else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
         
     elif answer=='🔙Назад':
+        bot.send_message(message.chat.id, "Выберите вопрос, на который могли бы ответить👇", reply_markup=kb.kb_home)
         keyboard = types.InlineKeyboardMarkup()
         key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousq')
         key_2 = types.InlineKeyboardButton(text='Ответить', callback_data='answer_await')
@@ -302,19 +177,37 @@ def answer_send(message):
         bot.send_message(message.from_user.id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
 
     else:
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        key_1 = types.KeyboardButton(text='🏠На главную')
-        key_2 = types.KeyboardButton(text='🔙Назад ')
-        keyboard.add(key_1)
-        keyboard.add(key_2)
         cursor.execute('UPDATE applications SET answer = %s WHERE id = %s', (answer, questionnum))
         conn.commit()
         cursor.execute('UPDATE applications SET status = %s WHERE id = %s', (True,questionnum))
         conn.commit()
-        bot.send_message(message.from_user.id, text="Ответ отправлен!")
+        cursor.execute('SELECT question FROM applications WHERE id = %s', (questionnum,))
+        question=cursor.fetchone()[0]
+        notify_user(question, answer, questionnum)
+        bot.send_message(message.from_user.id, text="Ответ отправлен!", reply_markup=kb.kb_home)
+
+        keyboard = types.InlineKeyboardMarkup()
+        key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousq')
+        key_2 = types.InlineKeyboardButton(text='Ответить', callback_data='answer_await')
+        key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextq')
+        keyboard.add(key_1, key_2, key_3)    
+        try:
+            cursor.execute('SELECT id FROM applications where status=False AND id>%s OR status=False', (questionnum,))
+            questionnum = cursor.fetchone()[0]
+            cursor.execute('SELECT question FROM applications where id=%s', (questionnum,))
+            qtext = cursor.fetchone()[0]
+            cursor.execute('SELECT username FROM applications where id=%s', (questionnum,))
+            quser = cursor.fetchone()[0]
+            bot.send_message(message.chat.id, text=F"Вопрос #{questionnum} от @{quser}\n\n{qtext}", reply_markup=keyboard)
+        except:
+            bot.send_message(message.from_user.id, text="Все вопросы уже решены!", reply_markup=kb.kb_home)
+
+        
 
 @bot.callback_query_handler(func=lambda call: call.data == 'directory')
 def handle_directory(call):
+    conn = get_db_connection()
+    cursor = conn.cursor()
     bot.delete_message(call.from_user.id, call.message.message_id)
     if call.message.message_id - 1 > 0:
         bot.delete_message(call.from_user.id, call.message.message_id - 1)
@@ -335,9 +228,12 @@ def handle_directory(call):
                 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    conn = get_db_connection()
+    cursor = conn.cursor()
     global user_id
     global questionnum 
-    global myquestionnum 
+    global myquestionnum
+    global question
     bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
     if call.data == 'medicina':
         keyboard = types.InlineKeyboardMarkup()
@@ -371,6 +267,21 @@ def callback_query(call):
         keyboard.add(key_back6)
         with open('файлы/корпус.jpg', 'rb') as photo:
             bot.send_photo(call.message.chat.id, photo, reply_markup=keyboard)
+    
+    elif call.data == 'satisfaction_yes':
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Спасибо за отклик!")
+        home(call.from_user.id)
+    
+    elif call.data == 'satisfaction_no':
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Жаль, я узнаю ответ на этот вопрос у администратора и передам его тебе как можно скорее!")
+        bd.db_table_val_app(user_id=call.from_user.id,
+                    username = call.from_user.username,
+                    question=question,
+                    answer="Пока на этот вопрос не ответили",
+                    status = False, cursor=cursor, conn=conn)
+        notify_admins(question, call.from_user.username)
+        home(call.from_user.id)
+
             
     elif call.data == 'previousq':
         
@@ -745,3 +656,4 @@ def callback_query(call):
         
 # Запускаем постоянный опрос бота в Телеграме
 bot.polling(none_stop=True, interval=0)
+

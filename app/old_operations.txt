@@ -1,0 +1,71 @@
+def satisfaction(message, question):
+    try:
+        if_admin = bd.if_admin(user_id, cursor)
+        conn.commit()
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
+    
+    if message.text == "да":
+        bot.send_message(message.chat.id, "Спасибо за отклик!", reply_markup=kb.main_keyboard_user)
+    elif message.text == "нет":
+        bot.send_message(message.chat.id, "Жаль, я узнаю ответ на этот вопрос у администратора и передам его тебе как можно скорее!", reply_markup=kb.main_keyboard_user)
+        bd.db_table_val_app(user_id=message.from_user.id,
+                    username = message.from_user.username,
+                    question=question,
+                    answer="Пока на этот вопрос не ответили",
+                    status = False, cursor=cursor, conn=conn)
+        notify_admins(question, message.from_user.username)
+    else:
+        if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
+        else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
+
+
+def question_send(message):
+    global user_id
+    try:
+        if_admin = bd.if_admin(user_id, cursor)
+        conn.commit()
+
+    except OperationalError as e:
+        print(f"Ошибка базы данных: {e}")
+        conn.rollback()
+    user_id = message.from_user.id
+    question = message.text
+    if question!='🏠На главную':
+        bd.db_table_val_app(user_id=message.from_user.id,
+                    username = message.from_user.username,
+                    question=question,
+                    answer="Пока на этот вопрос не ответили",
+                    status = False, cursor=cursor, conn=conn)
+        notify_admins(question, message.from_user.username)
+        if if_admin: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_admin)
+        else: bot.send_message(message.chat.id, "Ваш вопрос принят!", reply_markup=kb.main_keyboard_user)
+    else: 
+        if if_admin: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_admin)
+        else: bot.send_message(message.chat.id, texts.home, reply_markup=kb.main_keyboard_user)
+
+elif message.text == "❓️Задать вопрос":
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        key_1 = types.KeyboardButton(text='🏠На главную')
+        keyboard.add(key_1)
+        bot.send_message(message.chat.id, "Пожалуйста, напишите ваш вопрос, и я передам его оператору",reply_markup=keyboard)
+        bot.register_next_step_handler(message, question_send)
+
+    elif message.text == "📬Мои вопросы":
+        keyboard = types.InlineKeyboardMarkup()
+        key_1 = types.InlineKeyboardButton(text='⬅️', callback_data='previousmyq')
+        key_3 = types.InlineKeyboardButton(text='➡️', callback_data='nextmyq')
+        keyboard.add(key_1, key_3) 
+        
+        try:
+            cursor.execute('SELECT question FROM applications where telegram_id=%s', (user_id,))
+            myqtext = cursor.fetchone()[0]
+            cursor.execute('SELECT id FROM applications where telegram_id=%s', (user_id,))
+            myquestionnum = cursor.fetchone()[0]
+            cursor.execute('SELECT answer FROM applications where telegram_id=%s', (user_id,))
+            myquestionans = cursor.fetchone()[0]
+            bot.send_message(message.from_user.id, text=F"Вопрос #{myquestionnum}\n\n{myqtext}\n\nОтвет: {myquestionans}", reply_markup=keyboard)
+        except:
+            bot.send_message(message.from_user.id, text="Вы пока не задали ни одного вопроса")
